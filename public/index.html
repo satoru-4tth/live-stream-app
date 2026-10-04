@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LiveStream - 配信一覧</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header class="header">
+    <a class="logo" href="/"><span class="logo-dot"></span>LiveStream</a>
+    <a class="btn btn-live" href="/broadcast">● 配信を始める</a>
+  </header>
+
+  <main class="container">
+    <h2 class="section-title">配信中のライブ</h2>
+    <div id="room-grid" class="room-grid"></div>
+    <div id="empty" class="empty">
+      <p>現在配信中のライブはありません</p>
+      <a class="btn btn-primary" href="/broadcast">最初の配信を始める</a>
+    </div>
+  </main>
+
+  <script type="module" src="/js/home.js"></script>
+</body>
+</html>

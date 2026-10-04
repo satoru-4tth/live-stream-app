@@ -1,0 +1,29 @@
+{
+  "name": "live-stream-app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "WebRTC ライブ配信サイトのプロトタイプ (TypeScript)",
+  "type": "module",
+  "scripts": {
+    "build:client": "esbuild client/home.ts client/broadcast.ts client/watch.ts --bundle --format=esm --target=es2020 --outdir=public/js --sourcemap",
+    "build": "npm run build:client",
+    "start": "tsx server/index.ts",
+    "dev": "npm run build && npm start",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "esbuild": "^0.28.2",
+    "express": "^5.2.1",
+    "tsx": "^4.23.15",
+    "ws": "^8.22.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.6.4",
+    "@types/ws": "^8.18.2",
+    "typescript": "^7.0.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

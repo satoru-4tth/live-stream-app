@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LiveStream - 配信する</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header class="header">
+    <a class="logo" href="/"><span class="logo-dot"></span>LiveStream</a>
+    <span class="muted">配信スタジオ</span>
+  </header>
+
+  <main class="stage">
+    <section>
+      <div class="video-wrap">
+        <video id="preview" autoplay playsinline muted></video>
+        <div id="preview-placeholder" class="preview-placeholder">カメラまたは画面共有を選んでください</div>
+        <div class="video-badges live-only">
+          <span class="badge badge-live">LIVE</span>
+          <span class="badge" id="live-timer">00:00</span>
+          <span class="badge">👁 <span class="viewer-count">0</span></span>
+        </div>
+      </div>
+
+      <div class="controls">
+        <button id="btn-camera" class="btn">📷 カメラ</button>
+        <button id="btn-screen" class="btn">🖥 画面共有</button>
+        <button id="btn-mic" class="btn" disabled>🎤 マイクなし</button>
+      </div>
+
+      <div id="setup-panel" class="panel">
+        <h2>配信の設定</h2>
+        <label for="title">タイトル</label>
+        <input id="title" class="input" maxlength="60" placeholder="例: 雑談配信" />
+        <label for="name">配信者名</label>
+        <input id="name" class="input" maxlength="30" placeholder="例: さとる" />
+        <div class="controls">
+          <button id="btn-go-live" class="btn btn-live" disabled>● 配信開始</button>
+        </div>
+      </div>
+
+      <div id="live-panel" class="panel" hidden>
+        <h2>視聴用リンク</h2>
+        <div class="row">
+          <input id="share-link" class="input" readonly />
+          <button id="btn-copy" class="btn">コピー</button>
+        </div>
+        <div class="controls">
+          <button id="btn-end" class="btn">■ 配信を終了</button>
+        </div>
+      </div>
+
+      <div id="status" class="status"></div>
+    </section>
+
+    <aside class="chat">
+      <div class="chat-header">チャット <span class="muted">👁 <span class="viewer-count">0</span> 人視聴中</span></div>
+      <div id="chat-log" class="chat-log"></div>
+      <form id="chat-form" class="chat-form">
+        <input id="chat-input" class="input" maxlength="200" placeholder="配信開始後にチャットできます" autocomplete="off" />
+        <button class="btn btn-primary">送信</button>
+      </form>
+    </aside>
+  </main>
+
+  <style>
+    body:not(.is-live) .live-only { display: none; }
+  </style>
+  <script type="module" src="/js/broadcast.js"></script>
+</body>
+</html>

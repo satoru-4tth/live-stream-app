@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LiveStream - 視聴</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header class="header">
+    <a class="logo" href="/"><span class="logo-dot"></span>LiveStream</a>
+    <a class="btn btn-live" href="/broadcast">● 配信を始める</a>
+  </header>
+
+  <main class="stage">
+    <section>
+      <div class="video-wrap">
+        <video id="remote" autoplay playsinline controls></video>
+        <div id="overlay" class="video-overlay">読み込み中…</div>
+        <div class="video-badges">
+          <span class="badge badge-live">LIVE</span>
+          <span class="badge">👁 <span class="viewer-count">0</span></span>
+        </div>
+        <button id="btn-unmute" class="btn btn-primary unmute" hidden>🔊 音声をオンにする</button>
+      </div>
+      <div class="info">
+        <h1 id="title">&nbsp;</h1>
+        <div class="meta">
+          <span>🎙 <span id="broadcaster"></span></span>
+          <span>👁 <span class="viewer-count">0</span> 人視聴中</span>
+        </div>
+      </div>
+    </section>
+
+    <aside class="chat">
+      <div class="chat-header">チャット <span class="muted">👁 <span class="viewer-count">0</span></span></div>
+      <form id="join-form" class="name-form">
+        <input id="name" class="input" maxlength="30" placeholder="表示名（未設定ならランダム）" />
+        <button class="btn">名前を変更</button>
+      </form>
+      <div id="chat-log" class="chat-log"></div>
+      <form id="chat-form" class="chat-form">
+        <input id="chat-input" class="input" maxlength="200" placeholder="コメントする…" autocomplete="off" />
+        <button class="btn btn-primary">送信</button>
+      </form>
+    </aside>
+  </main>
+
+  <script type="module" src="/js/watch.js"></script>
+</body>
+</html>
