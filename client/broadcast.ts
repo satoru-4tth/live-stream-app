@@ -11,6 +11,8 @@ const nameInput = $<HTMLInputElement>("#name");
 const btnCamera = $<HTMLButtonElement>("#btn-camera");
 const btnScreen = $<HTMLButtonElement>("#btn-screen");
 const btnFlip = $<HTMLButtonElement>("#btn-flip");
+const btnBeauty = $<HTMLButtonElement>("#btn-beauty");
+const beautyInput = $<HTMLInputElement>("#beauty-level");
 const btnImage = $<HTMLButtonElement>("#btn-image");
 const imageInput = $<HTMLInputElement>("#image-input");
 const btnMic = $<HTMLButtonElement>("#btn-mic");
@@ -44,7 +46,7 @@ async function useCamera() {
   if (!hasMedia) return showStatus(noMediaMessage, true);
   try {
     // 切替時は先に今のカメラを止める (スマホは同時に 2 つ開けないことがある)
-    if (source === "camera") videoTrack?.stop();
+    if (source === "camera") releaseCamera();
     const video = { facingMode: facing, width: { ideal: 1280 }, height: { ideal: 720 } };
     let stream: MediaStream;
     try {
@@ -58,10 +60,89 @@ async function useCamera() {
       }
     }
     if (!audioTrack) setAudio(stream.getAudioTracks()[0] ?? null);
-    setVideo(stream.getVideoTracks()[0], "camera");
+    rawCamera = stream.getVideoTracks()[0];
+    applyCamera();
   } catch (e) {
     showStatus(`カメラを取得できませんでした: ${(e as Error).message}`, true);
   }
+}
+
+// ---------- 美顔補正 (カメラのみ) ----------
+// カメラ映像を canvas に描き直して軽く加工し、その canvas を映像として配信する。
+// 顔認識はしない簡易版: ① 縮小→拡大でぼかしたものを重ねて肌をなめらかに ② ほんのり明るく・暖かく
+let rawCamera: MediaStreamTrack | null = null; // 加工前のカメラ映像
+let beautyOn = localStorageGet("beautyOn") === "1";
+let beautyLevel = Math.min(100, Math.max(0, Number(localStorageGet("beautyLevel") ?? 50) || 0)); // 強さ 0〜100
+let stopBeauty: (() => void) | null = null;
+beautyInput.value = String(beautyLevel);
+
+/** カメラ (と美顔の加工) をすべて止める */
+function releaseCamera() {
+  stopBeauty?.();
+  stopBeauty = null;
+  rawCamera?.stop();
+  rawCamera = null;
+}
+
+/** 美顔の設定に合わせて、配信する映像を加工あり/なしに切り替える */
+function applyCamera() {
+  if (!rawCamera) return;
+  stopBeauty?.();
+  stopBeauty = null;
+  setVideo(beautyOn ? startBeauty(rawCamera) : rawCamera, "camera");
+}
+
+function startBeauty(raw: MediaStreamTrack): MediaStreamTrack {
+  const src = document.createElement("video");
+  src.muted = true;
+  src.playsInline = true;
+  src.srcObject = new MediaStream([raw]);
+  src.play().catch(() => {});
+
+  const out = document.createElement("canvas");
+  const ctx = out.getContext("2d")!;
+  const small = document.createElement("canvas");
+  const sctx = small.getContext("2d")!;
+
+  const draw = () => {
+    const w = src.videoWidth;
+    const h = src.videoHeight;
+    if (!w || src.readyState < 2) return; // まだ映像が来ていない
+    if (out.width !== w || out.height !== h) {
+      out.width = w;
+      out.height = h;
+      small.width = Math.max(2, Math.round(w / 3));
+      small.height = Math.max(2, Math.round(h / 3));
+    }
+    const k = beautyLevel / 100;
+    ctx.globalCompositeOperation = "source-over";
+    ctx.globalAlpha = 1;
+    ctx.drawImage(src, 0, 0, w, h);
+    if (k === 0) return;
+    // 肌をなめらかに: 縮小して拡大した (ぼけた) 画像を半透明で重ねる
+    sctx.drawImage(src, 0, 0, small.width, small.height);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.globalAlpha = 0.6 * k;
+    ctx.drawImage(small, 0, 0, w, h);
+    // 明るく・血色よく: 暖色のごく薄い色を「スクリーン」で重ねる
+    ctx.globalCompositeOperation = "screen";
+    ctx.globalAlpha = k;
+    ctx.fillStyle = "rgb(38, 28, 26)";
+    ctx.fillRect(0, 0, w, h);
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = "source-over";
+  };
+  const timer = window.setInterval(draw, 33); // 約 30fps
+  draw();
+
+  const track = out.captureStream(30).getVideoTracks()[0];
+  stopBeauty = () => {
+    clearInterval(timer);
+    track.stop();
+    src.srcObject = null;
+  };
+  return track;
 }
 
 async function useScreen() {
@@ -155,7 +236,8 @@ function setVideo(track: MediaStreamTrack, kind: Source) {
     const sender = pc.getSenders().find((s) => s.track?.kind === "video" || s.track === old);
     sender?.replaceTrack(track);
   }
-  if (old && old !== track) old.stop();
+  if (old && old !== track && old !== rawCamera) old.stop(); // 美顔のオン/オフ切替では、元のカメラ映像は止めない
+  if (kind !== "camera") releaseCamera(); // カメラ以外に切り替えたらカメラを解放
   updatePreview();
 }
 
@@ -174,6 +256,10 @@ function updatePreview() {
   placeholder.hidden = !!videoTrack;
   preview.classList.toggle("mirror", source === "camera" && facing === "user"); // 自撮りだけ左右反転
   btnFlip.disabled = source !== "camera";
+  btnBeauty.disabled = source !== "camera";
+  btnBeauty.textContent = beautyOn ? "✨ 美顔 オン" : "✨ 美顔 オフ";
+  btnBeauty.classList.toggle("active", beautyOn);
+  beautyInput.disabled = !(beautyOn && source === "camera");
   btnCamera.classList.toggle("active", source === "camera");
   btnScreen.classList.toggle("active", source === "screen");
   btnImage.classList.toggle("active", source === "image");
@@ -186,6 +272,15 @@ btnCamera.onclick = useCamera;
 btnFlip.onclick = () => {
   facing = facing === "user" ? "environment" : "user";
   useCamera();
+};
+btnBeauty.onclick = () => {
+  beautyOn = !beautyOn;
+  localStorageSet("beautyOn", beautyOn ? "1" : "0");
+  applyCamera();
+};
+beautyInput.oninput = () => {
+  beautyLevel = Number(beautyInput.value);
+  localStorageSet("beautyLevel", String(beautyLevel)); // 強さは次のフレームから反映される
 };
 btnScreen.onclick = useScreen;
 // 画面共有はスマホのブラウザでは使えないので、非対応ならボタンを隠す
@@ -336,6 +431,7 @@ btnEnd.onclick = () => {
   clearInterval(timer);
   clearInterval(imageTimer);
   clearTimeout(thumbTimer);
+  releaseCamera();
   videoTrack?.stop();
   audioTrack?.stop();
   location.href = "/";
