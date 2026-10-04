@@ -142,6 +142,23 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 4px
 .name-form .btn { padding: 6px 12px; font-size: 13px; }
 .chat-disabled { color: var(--muted); text-align: center; padding: 20px; margin: auto; font-size: 13px; }
 
+/* ---------- 投げ銭 ---------- */
+.tip-panel .muted { color: var(--muted); font-weight: 400; font-size: 12px; }
+.tip-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+.tip-btn { border-color: #fbbf24; color: #fbbf24; font-weight: 700; }
+.chat-tip { background: rgba(251,191,36,.15); border-left: 3px solid #fbbf24; padding: 4px 8px; border-radius: 4px; font-weight: 700; }
+.tip-pop {
+  position: absolute; right: 16px; bottom: 16px; background: rgba(251,191,36,.95); color: #1a1a1a;
+  font-weight: 800; padding: 8px 14px; border-radius: 999px; pointer-events: none;
+  animation: tip-rise 3.5s ease-out forwards;
+}
+@keyframes tip-rise {
+  0% { opacity: 0; transform: translateY(20px) scale(.8); }
+  10% { opacity: 1; transform: translateY(0) scale(1.1); }
+  80% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-120px); }
+}
+
 @media (max-width: 900px) {
   .stage { grid-template-columns: 1fr; padding: 12px; }
   .chat { height: 420px; position: static; }

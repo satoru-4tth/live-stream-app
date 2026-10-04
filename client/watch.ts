@@ -1,5 +1,5 @@
-import { ICE_SERVERS, type ServerMessage, type SignalData } from "../shared/protocol";
-import { $, Signaling, setupChat, setViewerCount } from "./common";
+import { ICE_SERVERS, TIP_AMOUNTS, type ServerMessage, type SignalData } from "../shared/protocol";
+import { $, Signaling, formatYen, setupChat, setupTipDisplay, setViewerCount } from "./common";
 
 const video = $<HTMLVideoElement>("#remote");
 const overlay = $("#overlay");
@@ -40,6 +40,8 @@ async function start(id: string) {
     return showOverlay((e as Error).message);
   }
   setupChat(sig);
+  setupTipDisplay(sig);
+  setupTipButtons(sig);
 
   sig.on((msg) => onMessage(sig, msg));
   sig.send({ type: "join-room", roomId: id, name: nameInput.value });
@@ -53,6 +55,17 @@ async function start(id: string) {
     try { localStorage.setItem("viewerName", name); } catch { /* noop */ }
     nameInput.blur();
   });
+}
+
+function setupTipButtons(sig: Signaling) {
+  const box = $("#tip-buttons");
+  for (const amount of TIP_AMOUNTS) {
+    const b = document.createElement("button");
+    b.className = "btn tip-btn";
+    b.textContent = formatYen(amount);
+    b.onclick = () => sig.send({ type: "tip", amount });
+    box.appendChild(b);
+  }
 }
 
 function onMessage(sig: Signaling, msg: ServerMessage) {

@@ -73,11 +73,36 @@ export function setupChat(sig: Signaling) {
       text.textContent = msg.text; // textContent で XSS 対策
       row.append(name, text);
       append(row);
+    } else if (msg.type === "tip") {
+      const row = document.createElement("div");
+      row.className = "chat-row chat-tip";
+      row.textContent = `💰 ${msg.name} さんが ${formatYen(msg.amount)} を投げ銭しました！`;
+      append(row);
     } else if (msg.type === "system") {
       const row = document.createElement("div");
       row.className = "chat-system";
       row.textContent = msg.text;
       append(row);
+    }
+  });
+}
+
+export function formatYen(amount: number): string {
+  return `¥${amount.toLocaleString("ja-JP")}`;
+}
+
+/** 投げ銭の累計表示と、映像上に流れる演出 (配信者・視聴者共通) */
+export function setupTipDisplay(sig: Signaling) {
+  const wrap = $(".video-wrap");
+  sig.on((msg) => {
+    if (msg.type === "tip-total") {
+      document.querySelectorAll(".tip-total").forEach((el) => (el.textContent = formatYen(msg.total)));
+    } else if (msg.type === "tip") {
+      const pop = document.createElement("div");
+      pop.className = "tip-pop";
+      pop.textContent = `💰 ${msg.name} ${formatYen(msg.amount)}`;
+      wrap.appendChild(pop);
+      pop.addEventListener("animationend", () => pop.remove());
     }
   });
 }

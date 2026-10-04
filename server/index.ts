@@ -4,7 +4,8 @@ import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { WebSocketServer, WebSocket } from "ws";
-import type { ClientMessage, RoomSummary, ServerMessage } from "../shared/protocol.js";
+import { TIP_AMOUNTS, type ClientMessage, type RoomSummary, type ServerMessage } from "../shared/protocol.js";
+import { paymentProvider } from "./payments.js";
 
 const PORT = Number(process.env.PORT ?? 3000);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -26,6 +27,7 @@ interface Room {
   startedAt: number;
   thumbnail?: { data: Buffer; updatedAt: number };
   thumbnailRequestedAt?: number;
+  tipTotal: number;
 }
 
 const MAX_THUMBNAIL_BYTES = 200 * 1024;
@@ -105,6 +107,7 @@ function handleMessage(client: Client, msg: ClientMessage) {
         broadcaster: client,
         viewers: new Map(),
         startedAt: Date.now(),
+        tipTotal: 0,
       };
       client.name = clip(msg.name, 30) || "配信者";
       client.roomId = room.id;
@@ -133,6 +136,7 @@ function handleMessage(client: Client, msg: ClientMessage) {
       });
       // 配信者に通知 → 配信者側から offer を送る
       send(room.broadcaster, { type: "viewer-joined", viewerId: client.id });
+      send(client, { type: "tip-total", total: room.tipTotal });
       broadcastToRoom(room, { type: "system", text: `${client.name} さんが入室しました` });
       broadcastViewerCount(room);
       break;
@@ -157,6 +161,29 @@ function handleMessage(client: Client, msg: ClientMessage) {
         ts: Date.now(),
         isBroadcaster: client.role === "broadcaster",
       });
+      break;
+    }
+
+    case "tip": {
+      // 視聴者のみ。決められた金額以外は受け付けない
+      const room = client.roomId ? rooms.get(client.roomId) : undefined;
+      if (!room || client.role !== "viewer") return;
+      if (!(TIP_AMOUNTS as readonly number[]).includes(msg.amount)) {
+        return send(client, { type: "error", message: "不正な金額です" });
+      }
+      const amount = msg.amount;
+      const viewerName = client.name;
+      // 決済の成否を待ってから反映する (疑似決済は即成功。本番では Stripe 等に差し替え)
+      paymentProvider.charge({ roomId: room.id, viewerId: client.id, amount }).then(
+        () => {
+          if (!rooms.has(room.id)) return;
+          room.tipTotal += amount;
+          broadcastToRoom(room, { type: "tip", name: viewerName, amount, ts: Date.now() });
+          broadcastToRoom(room, { type: "tip-total", total: room.tipTotal });
+          console.log(`[tip] ${room.id} ${viewerName} ¥${amount}`);
+        },
+        (e) => send(client, { type: "error", message: `決済に失敗しました: ${(e as Error).message}` }),
+      );
       break;
     }
 

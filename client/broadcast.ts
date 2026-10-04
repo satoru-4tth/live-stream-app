@@ -1,5 +1,5 @@
 import { ICE_SERVERS, type ServerMessage, type SignalData } from "../shared/protocol";
-import { $, Signaling, setupChat, setViewerCount, elapsed } from "./common";
+import { $, Signaling, setupChat, setupTipDisplay, setViewerCount, elapsed } from "./common";
 
 // ---------- 要素 ----------
 const preview = $<HTMLVideoElement>("#preview");
@@ -180,6 +180,7 @@ btnGoLive.onclick = async () => {
     return;
   }
   setupChat(sig);
+  setupTipDisplay(sig);
   sig.on(onMessage);
   sig.send({ type: "create-room", title: titleInput.value, name: nameInput.value });
 };

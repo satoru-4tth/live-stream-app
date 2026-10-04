@@ -23,6 +23,7 @@ export type ClientMessage =
   | { type: "chat"; text: string }
   | { type: "set-name"; name: string }
   | { type: "thumbnail"; dataUrl: string }
+  | { type: "tip"; amount: number }
   | { type: "end-room" };
 
 /** サーバー → クライアント */
@@ -33,11 +34,16 @@ export type ServerMessage =
   | { type: "viewer-left"; viewerId: string }
   | { type: "signal"; from: string; data: SignalData }
   | { type: "chat"; name: string; text: string; ts: number; isBroadcaster: boolean }
+  | { type: "tip"; name: string; amount: number; ts: number }
+  | { type: "tip-total"; total: number }
   | { type: "system"; text: string }
   | { type: "viewer-count"; count: number }
   | { type: "request-thumbnail" }
   | { type: "room-ended" }
   | { type: "error"; message: string };
+
+/** 投げ銭で選べる金額 (円)。サーバー側でもこの値だけ受け付ける */
+export const TIP_AMOUNTS = [100, 500, 1000, 5000, 10000] as const;
 
 export const ICE_SERVERS: RTCIceServer[] = [
   { urls: "stun:stun.l.google.com:19302" },
