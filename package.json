@@ -5,13 +5,14 @@
   "description": "WebRTC ライブ配信サイトのプロトタイプ (TypeScript)",
   "type": "module",
   "scripts": {
-    "build:client": "esbuild client/home.ts client/broadcast.ts client/watch.ts --bundle --format=esm --target=es2020 --outdir=public/js --sourcemap",
-    "build": "npm run build:client",
+    "build:client": "esbuild client/home.ts client/broadcast.ts client/watch.ts --bundle --splitting --format=esm --target=es2020 --outdir=public/js --sourcemap",
+    "build": "node scripts/copy-mediapipe.mjs && npm run build:client",
     "start": "tsx server/index.ts",
     "dev": "npm run build && npm start",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@mediapipe/tasks-vision": "^1.0.1",
     "esbuild": "^0.28.2",
     "express": "^5.2.1",
     "tsx": "^4.23.15",
