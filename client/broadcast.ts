@@ -251,6 +251,8 @@ function updatePreview() {
 
 btnCamera.onclick = useCamera;
 btnScreen.onclick = useScreen;
+// 画面共有はスマホでは使えないので、ボタンを隠す
+if (isMobile || !navigator.mediaDevices?.getDisplayMedia) btnScreen.hidden = true;
 btnImage.onclick = () => imageInput.click();
 imageInput.onchange = () => {
   const file = imageInput.files?.[0];
