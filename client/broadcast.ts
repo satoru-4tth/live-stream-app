@@ -131,7 +131,6 @@ function setVideo(track: MediaStreamTrack, kind: Source) {
   }
   if (old && old !== track) old.stop();
   updatePreview();
-  if (sig) setTimeout(sendThumbnail, 1500); // 配信中に映像を切り替えたらサムネイルも更新
 }
 
 function setAudio(track: MediaStreamTrack | null) {
@@ -212,6 +211,9 @@ function onMessage(msg: ServerMessage) {
     case "signal":
       enqueue(msg.from, () => handleSignal(msg.from, msg.data));
       break;
+    case "request-thumbnail":
+      sendThumbnail(); // 誰かが一覧ページを開いた → 今の画面を送る
+      break;
     case "viewer-count":
       setViewerCount(msg.count);
       break;
@@ -279,9 +281,9 @@ function sendThumbnail() {
   sig.send({ type: "thumbnail", dataUrl: thumbCanvas.toDataURL("image/jpeg", 0.7) });
 }
 
+/** 配信開始時に 1 枚撮影。以降は一覧ページが開かれたときだけ撮影する */
 function startThumbnails() {
-  setTimeout(sendThumbnail, 1500); // 配信開始直後に 1 枚
-  thumbTimer = window.setInterval(sendThumbnail, 15000); // 以降 15 秒ごとに更新
+  thumbTimer = window.setTimeout(sendThumbnail, 1500);
 }
 
 // ---------- 配信終了 ----------
@@ -294,7 +296,7 @@ btnEnd.onclick = () => {
   peers.clear();
   clearInterval(timer);
   clearInterval(imageTimer);
-  clearInterval(thumbTimer);
+  clearTimeout(thumbTimer);
   videoTrack?.stop();
   audioTrack?.stop();
   location.href = "/";

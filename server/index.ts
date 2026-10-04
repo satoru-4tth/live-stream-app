@@ -25,6 +25,7 @@ interface Room {
   viewers: Map<string, Client>;
   startedAt: number;
   thumbnail?: { data: Buffer; updatedAt: number };
+  thumbnailRequestedAt?: number;
 }
 
 const MAX_THUMBNAIL_BYTES = 200 * 1024;
@@ -54,6 +55,19 @@ app.get("/api/rooms/:id/thumbnail.jpg", (req, res) => {
   const thumb = rooms.get(req.params.id)?.thumbnail;
   if (!thumb) return res.status(404).end();
   res.type("jpeg").set("Cache-Control", "public, max-age=300").send(thumb.data);
+});
+
+// 一覧ページを開いたときに呼ばれる: 各配信者に「今の画面を 1 枚送って」と依頼する
+// (同じ配信への依頼は 5 秒に 1 回まで。アクセスが集中しても配信者の負担にならないように)
+const THUMBNAIL_REQUEST_INTERVAL = 5000;
+app.post("/api/rooms/refresh-thumbnails", (_req, res) => {
+  const now = Date.now();
+  for (const room of rooms.values()) {
+    if (now - (room.thumbnailRequestedAt ?? 0) < THUMBNAIL_REQUEST_INTERVAL) continue;
+    room.thumbnailRequestedAt = now;
+    send(room.broadcaster, { type: "request-thumbnail" });
+  }
+  res.status(204).end();
 });
 
 const server = createServer(app);

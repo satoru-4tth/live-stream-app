@@ -4,6 +4,17 @@ import { $, elapsed } from "./common";
 const grid = $("#room-grid");
 const empty = $("#empty");
 
+// ページを開いた時点の画像で固定するため、配信ごとに表示するサムネイルの版を覚えておく
+// (他の人が一覧を開いてサーバー側の画像が新しくなっても、このページの表示は変えない)
+const shownVersion = new Map<string, number>();
+let locked = false;
+
+function thumbnailVersion(r: RoomSummary): number | null {
+  if (!r.thumbnailUpdatedAt) return null;
+  if (!locked || !shownVersion.has(r.id)) shownVersion.set(r.id, r.thumbnailUpdatedAt);
+  return shownVersion.get(r.id)!;
+}
+
 async function refresh() {
   try {
     const res = await fetch("/api/rooms");
@@ -27,10 +38,11 @@ function render(rooms: RoomSummary[]) {
       thumb.innerHTML = `<span class="live-badge">LIVE</span><span class="thumb-viewers">👁 <b></b></span><span class="thumb-time"></span>`;
       thumb.querySelector("b")!.textContent = String(r.viewerCount);
       thumb.querySelector(".thumb-time")!.textContent = elapsed(r.startedAt);
-      if (r.thumbnailUpdatedAt) {
+      const version = thumbnailVersion(r);
+      if (version) {
         const img = document.createElement("img");
         img.alt = "";
-        img.src = `/api/rooms/${encodeURIComponent(r.id)}/thumbnail.jpg?v=${r.thumbnailUpdatedAt}`;
+        img.src = `/api/rooms/${encodeURIComponent(r.id)}/thumbnail.jpg?v=${version}`;
         thumb.classList.add("has-image");
         thumb.prepend(img);
       }
@@ -49,5 +61,14 @@ function render(rooms: RoomSummary[]) {
   );
 }
 
+// 1. まず手元にある画像ですぐ一覧を表示
+// 2. 配信者に最新の画面を依頼し、届いた頃に取り直して、その画像で固定する
 refresh();
-setInterval(refresh, 3000);
+fetch("/api/rooms/refresh-thumbnails", { method: "POST" })
+  .catch(() => {})
+  .then(() => new Promise((r) => setTimeout(r, 1500)))
+  .then(refresh)
+  .finally(() => {
+    locked = true;
+    setInterval(refresh, 3000); // 以降は視聴者数・経過時間・新しい配信だけ更新
+  });

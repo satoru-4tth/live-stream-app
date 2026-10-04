@@ -35,6 +35,7 @@ export type ServerMessage =
   | { type: "chat"; name: string; text: string; ts: number; isBroadcaster: boolean }
   | { type: "system"; text: string }
   | { type: "viewer-count"; count: number }
+  | { type: "request-thumbnail" }
   | { type: "room-ended" }
   | { type: "error"; message: string };
 
