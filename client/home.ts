@@ -27,6 +27,13 @@ function render(rooms: RoomSummary[]) {
       thumb.innerHTML = `<span class="live-badge">LIVE</span><span class="thumb-viewers">👁 <b></b></span><span class="thumb-time"></span>`;
       thumb.querySelector("b")!.textContent = String(r.viewerCount);
       thumb.querySelector(".thumb-time")!.textContent = elapsed(r.startedAt);
+      if (r.thumbnailUpdatedAt) {
+        const img = document.createElement("img");
+        img.alt = "";
+        img.src = `/api/rooms/${encodeURIComponent(r.id)}/thumbnail.jpg?v=${r.thumbnailUpdatedAt}`;
+        thumb.classList.add("has-image");
+        thumb.prepend(img);
+      }
 
       const title = document.createElement("div");
       title.className = "room-title";

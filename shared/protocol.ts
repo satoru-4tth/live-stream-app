@@ -6,6 +6,8 @@ export interface RoomSummary {
   broadcasterName: string;
   viewerCount: number;
   startedAt: number;
+  /** サムネイル最終更新時刻 (未設定なら null)。画像は /api/rooms/:id/thumbnail.jpg */
+  thumbnailUpdatedAt: number | null;
 }
 
 /** WebRTC のシグナリングデータ (SDP または ICE 候補) */
@@ -20,6 +22,7 @@ export type ClientMessage =
   | { type: "signal"; to: string; data: SignalData }
   | { type: "chat"; text: string }
   | { type: "set-name"; name: string }
+  | { type: "thumbnail"; dataUrl: string }
   | { type: "end-room" };
 
 /** サーバー → クライアント */

@@ -24,7 +24,10 @@ interface Room {
   broadcaster: Client;
   viewers: Map<string, Client>;
   startedAt: number;
+  thumbnail?: { data: Buffer; updatedAt: number };
 }
+
+const MAX_THUMBNAIL_BYTES = 200 * 1024;
 
 const clients = new Map<string, Client>();
 const rooms = new Map<string, Room>();
@@ -46,10 +49,17 @@ app.get("/api/rooms/:id", (req, res) => {
   res.json(summarize(room));
 });
 
+// 配信中の映像のサムネイル (配信者が定期的に送ってくる JPEG)
+app.get("/api/rooms/:id/thumbnail.jpg", (req, res) => {
+  const thumb = rooms.get(req.params.id)?.thumbnail;
+  if (!thumb) return res.status(404).end();
+  res.type("jpeg").set("Cache-Control", "public, max-age=300").send(thumb.data);
+});
+
 const server = createServer(app);
 
 // ---------- WebSocket (シグナリング / チャット) ----------
-const wss = new WebSocketServer({ server, path: "/ws" });
+const wss = new WebSocketServer({ server, path: "/ws", maxPayload: 512 * 1024 });
 
 wss.on("connection", (ws) => {
   const client: Client = { id: randomUUID(), ws, name: "名無し" };
@@ -142,6 +152,17 @@ function handleMessage(client: Client, msg: ClientMessage) {
       break;
     }
 
+    case "thumbnail": {
+      // 配信者本人のみ。JPEG の data URL だけ受け付ける
+      const room = client.roomId ? rooms.get(client.roomId) : undefined;
+      const prefix = "data:image/jpeg;base64,";
+      if (!room || client.role !== "broadcaster" || typeof msg.dataUrl !== "string" || !msg.dataUrl.startsWith(prefix)) return;
+      const data = Buffer.from(msg.dataUrl.slice(prefix.length), "base64");
+      if (data.length === 0 || data.length > MAX_THUMBNAIL_BYTES) return;
+      room.thumbnail = { data, updatedAt: Date.now() };
+      break;
+    }
+
     case "end-room":
       if (client.role === "broadcaster") leave(client);
       break;
@@ -191,6 +212,7 @@ function summarize(room: Room): RoomSummary {
     broadcasterName: room.broadcaster.name,
     viewerCount: room.viewers.size,
     startedAt: room.startedAt,
+    thumbnailUpdatedAt: room.thumbnail?.updatedAt ?? null,
   };
 }
 

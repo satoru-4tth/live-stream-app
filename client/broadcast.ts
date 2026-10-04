@@ -131,6 +131,7 @@ function setVideo(track: MediaStreamTrack, kind: Source) {
   }
   if (old && old !== track) old.stop();
   updatePreview();
+  if (sig) setTimeout(sendThumbnail, 1500); // 配信中に映像を切り替えたらサムネイルも更新
 }
 
 function setAudio(track: MediaStreamTrack | null) {
@@ -197,6 +198,7 @@ function onMessage(msg: ServerMessage) {
       shareLink.value = `${location.origin}/watch?room=${msg.roomId}`;
       $<HTMLInputElement>("#chat-input").placeholder = "コメントする…";
       timer = window.setInterval(() => (liveTimer.textContent = elapsed(startedAt)), 1000);
+      startThumbnails();
       showStatus("配信中です。リンクを共有して視聴者を招待しましょう。");
       break;
     }
@@ -257,6 +259,31 @@ function enqueue(id: string, fn: () => Promise<void>) {
   queues.set(id, prev.then(fn).catch((e) => console.error(e)));
 }
 
+// ---------- サムネイル (配信一覧に表示) ----------
+let thumbTimer = 0;
+const thumbCanvas = document.createElement("canvas");
+thumbCanvas.width = 480;
+thumbCanvas.height = 270;
+
+function sendThumbnail() {
+  if (!sig || preview.videoWidth === 0) return;
+  const ctx = thumbCanvas.getContext("2d")!;
+  const { width: W, height: H } = thumbCanvas;
+  // 16:9 に収まるよう中央を切り抜き (視聴者と同じく左右反転なし)
+  const scale = Math.max(W / preview.videoWidth, H / preview.videoHeight);
+  const w = preview.videoWidth * scale;
+  const h = preview.videoHeight * scale;
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0, 0, W, H);
+  ctx.drawImage(preview, (W - w) / 2, (H - h) / 2, w, h);
+  sig.send({ type: "thumbnail", dataUrl: thumbCanvas.toDataURL("image/jpeg", 0.7) });
+}
+
+function startThumbnails() {
+  setTimeout(sendThumbnail, 1500); // 配信開始直後に 1 枚
+  thumbTimer = window.setInterval(sendThumbnail, 15000); // 以降 15 秒ごとに更新
+}
+
 // ---------- 配信終了 ----------
 btnEnd.onclick = () => {
   if (!confirmEnd()) return;
@@ -267,6 +294,7 @@ btnEnd.onclick = () => {
   peers.clear();
   clearInterval(timer);
   clearInterval(imageTimer);
+  clearInterval(thumbTimer);
   videoTrack?.stop();
   audioTrack?.stop();
   location.href = "/";
