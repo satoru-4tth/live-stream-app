@@ -2,6 +2,7 @@
 // 顔の位置は MediaPipe の顔検出 (BlazeFace) で求める。モデルと WASM は自サーバーから配る
 // (public/mediapipe/。WASM は npm run build で node_modules からコピー)。
 import type { FaceDetector } from "@mediapipe/tasks-vision";
+import { drawCostume, type Costume } from "./costume";
 
 let detectorPromise: Promise<FaceDetector> | undefined;
 
@@ -52,9 +53,10 @@ const FACE_HOLD = 500; // 顔を見失っても、この時間 (ms) は直前の
 
 /**
  * カメラ映像を加工した映像トラックを返す。
+ * 美顔補正のあとに、選ばれた着ぐるみ (getCostume) を顔に重ねる。
  * 顔検出器の準備ができるまでは加工なしで流れ、準備できたら ready が true になる (失敗したら false)。
  */
-export function startBeauty(raw: MediaStreamTrack, getLevel: () => number) {
+export function startBeauty(raw: MediaStreamTrack, getLevel: () => number, getCostume: () => Costume = () => "none") {
   const src = document.createElement("video");
   src.muted = true;
   src.playsInline = true;
@@ -125,9 +127,14 @@ export function startBeauty(raw: MediaStreamTrack, getLevel: () => number) {
     } catch {
       /* 検出に失敗したフレームは加工しない */
     }
+    if (!face) return;
     const k = getLevel() / 100;
-    if (!face || k === 0) return;
+    if (k > 0) smoothSkin(face, k, w, h);
+    drawCostume(ctx, face, getCostume());
+  };
 
+  /** 顔の部分だけ、肌をなめらかに・明るくする */
+  const smoothSkin = (face: Box, k: number, w: number, h: number) => {
     // 顔のまわりの楕円 (顔の枠より少し広く、髪や背景はあまり含めない)
     const cx = face.x + face.w / 2;
     const cy = face.y + face.h / 2;

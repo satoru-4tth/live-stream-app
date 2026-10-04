@@ -1,5 +1,6 @@
 import type { ServerMessage, SignalData } from "../shared/protocol";
 import { startBeauty } from "./beauty";
+import { COSTUMES, type Costume } from "./costume";
 import { $, Signaling, loadIceServers, setupChat, setupReactions, setupSupporters, setupTipDisplay, setViewerCount, elapsed } from "./common";
 
 // ---------- 要素 ----------
@@ -70,6 +71,28 @@ const BEAUTY_LEVEL = 50; // 補正の強さ 0〜100
 let rawCamera: MediaStreamTrack | null = null; // 加工前のカメラ映像
 let stopBeauty: (() => void) | null = null;
 
+// ---------- 着ぐるみ (カメラのみ) ----------
+// 顔認識の結果をもとに、動物のフードを顔に重ねる。配信中もいつでも切り替えられる
+let costume: Costume = "none";
+const costumeBar = $("#costume-bar");
+for (const c of COSTUMES) {
+  const b = document.createElement("button");
+  b.className = "btn chip";
+  b.textContent = c.label;
+  b.dataset.costume = c.id;
+  b.onclick = () => {
+    costume = c.id;
+    updateCostumeBar();
+  };
+  costumeBar.append(b);
+}
+function updateCostumeBar() {
+  costumeBar.hidden = source !== "camera";
+  for (const b of costumeBar.querySelectorAll<HTMLButtonElement>("button")) {
+    b.classList.toggle("active", b.dataset.costume === costume);
+  }
+}
+
 /** カメラ (と美顔の加工) をすべて止める */
 function releaseCamera() {
   stopBeauty?.();
@@ -82,21 +105,21 @@ function releaseCamera() {
 function applyCamera() {
   if (!rawCamera) return;
   stopBeauty?.();
-  const beauty = startBeauty(rawCamera, () => BEAUTY_LEVEL);
+  const beauty = startBeauty(rawCamera, () => BEAUTY_LEVEL, () => costume);
   stopBeauty = beauty.stop;
   setVideo(beauty.track, "camera");
-  const preparing = "美顔の準備中です…（初回は数秒かかります）";
+  const preparing = "顔認識の準備中です…（初回は数秒かかります）";
   showStatus(preparing);
   beauty.ready.then((ok) => {
     if (stopBeauty !== beauty.stop) return; // その間にカメラが切り替わった
     if (ok) {
       if (statusEl.textContent === preparing) showStatus("");
     } else {
-      // 顔認識を読み込めなかったときは、加工なしのカメラ映像で配信する
+      // 顔認識を読み込めなかったときは、加工なしのカメラ映像で配信する (着ぐるみも使えない)
       stopBeauty?.();
       stopBeauty = null;
       if (rawCamera) setVideo(rawCamera, "camera");
-      showStatus("顔認識を読み込めなかったため、美顔なしで配信します（通信状況を確認してください）", true);
+      showStatus("顔認識を読み込めなかったため、美顔・着ぐるみなしで配信します（通信状況を確認してください）", true);
     }
   });
 }
@@ -214,6 +237,7 @@ function updatePreview() {
   btnCamera.classList.toggle("active", source === "camera");
   btnScreen.classList.toggle("active", source === "screen");
   btnImage.classList.toggle("active", source === "image");
+  updateCostumeBar();
   btnGoLive.disabled = !videoTrack || !!sig;
   btnMic.disabled = !audioTrack;
   btnMic.textContent = !audioTrack ? "🎤 マイクなし" : audioTrack.enabled ? "🎤 ミュート" : "🔇 ミュート解除";

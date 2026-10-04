@@ -45,6 +45,7 @@ button, input { font: inherit; color: inherit; }
 .btn:hover:not(:disabled) { border-color: var(--accent); }
 .btn:disabled { opacity: .45; cursor: not-allowed; }
 .btn.active { border-color: var(--accent); background: rgba(124, 92, 255, .18); }
+.btn.chip { padding: 6px 12px; font-size: 14px; }
 .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 .btn-primary:hover:not(:disabled) { background: var(--accent-2); }
 .btn-live { background: var(--live); border-color: var(--live); color: #fff; }
