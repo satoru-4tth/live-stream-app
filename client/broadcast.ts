@@ -124,7 +124,13 @@ function applyCamera() {
   });
 }
 
+// スマホ・タブレットのブラウザは画面共有に非対応 (対応を名乗っていても映らないことがある)
+const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
+
 async function useScreen() {
+  if (isMobile || !navigator.mediaDevices?.getDisplayMedia) {
+    return showStatus("スマホでは画面共有はできません。カメラ・画像での配信か、PC のブラウザをご利用ください", true);
+  }
   try {
     const stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 30 }, audio: false });
     const track = stream.getVideoTracks()[0];
@@ -245,8 +251,6 @@ function updatePreview() {
 
 btnCamera.onclick = useCamera;
 btnScreen.onclick = useScreen;
-// 画面共有はスマホのブラウザでは使えないので、非対応ならボタンを隠す
-if (!navigator.mediaDevices?.getDisplayMedia) btnScreen.hidden = true;
 btnImage.onclick = () => imageInput.click();
 imageInput.onchange = () => {
   const file = imageInput.files?.[0];
