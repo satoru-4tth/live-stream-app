@@ -1,3 +1,4 @@
+.btn[hidden], .controls[hidden] { display: none; }
 :root {
   --bg: #0f1115;
   --panel: #181b22;
