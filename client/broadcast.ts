@@ -11,8 +11,6 @@ const titleInput = $<HTMLInputElement>("#title");
 const nameInput = $<HTMLInputElement>("#name");
 const btnCamera = $<HTMLButtonElement>("#btn-camera");
 const btnScreen = $<HTMLButtonElement>("#btn-screen");
-const btnBeauty = $<HTMLButtonElement>("#btn-beauty");
-const beautyInput = $<HTMLInputElement>("#beauty-level");
 const btnImage = $<HTMLButtonElement>("#btn-image");
 const imageInput = $<HTMLInputElement>("#image-input");
 const btnMic = $<HTMLButtonElement>("#btn-mic");
@@ -66,13 +64,11 @@ async function useCamera() {
   }
 }
 
-// ---------- 美顔補正 (カメラのみ) ----------
+// ---------- 美顔補正 (カメラのみ・常にオン) ----------
 // カメラ映像から顔を見つけ、顔の部分だけを加工して配信する (処理の中身は beauty.ts)
+const BEAUTY_LEVEL = 50; // 補正の強さ 0〜100
 let rawCamera: MediaStreamTrack | null = null; // 加工前のカメラ映像
-let beautyOn = localStorageGet("beautyOn") === "1";
-let beautyLevel = Math.min(100, Math.max(0, Number(localStorageGet("beautyLevel") ?? 50) || 0)); // 強さ 0〜100
 let stopBeauty: (() => void) | null = null;
-beautyInput.value = String(beautyLevel);
 
 /** カメラ (と美顔の加工) をすべて止める */
 function releaseCamera() {
@@ -82,27 +78,25 @@ function releaseCamera() {
   rawCamera = null;
 }
 
-/** 美顔の設定に合わせて、配信する映像を加工あり/なしに切り替える */
+/** カメラ映像に美顔補正をかけて配信映像にする */
 function applyCamera() {
   if (!rawCamera) return;
   stopBeauty?.();
-  stopBeauty = null;
-  if (!beautyOn) return setVideo(rawCamera, "camera");
-
-  const beauty = startBeauty(rawCamera, () => beautyLevel);
+  const beauty = startBeauty(rawCamera, () => BEAUTY_LEVEL);
   stopBeauty = beauty.stop;
   setVideo(beauty.track, "camera");
   const preparing = "美顔の準備中です…（初回は数秒かかります）";
   showStatus(preparing);
   beauty.ready.then((ok) => {
-    if (stopBeauty !== beauty.stop) return; // その間に設定が変わった
+    if (stopBeauty !== beauty.stop) return; // その間にカメラが切り替わった
     if (ok) {
       if (statusEl.textContent === preparing) showStatus("");
     } else {
-      beautyOn = false;
-      localStorageSet("beautyOn", "0");
-      applyCamera();
-      showStatus("顔認識を読み込めなかったため、美顔は使えません（通信状況を確認してください）", true);
+      // 顔認識を読み込めなかったときは、加工なしのカメラ映像で配信する
+      stopBeauty?.();
+      stopBeauty = null;
+      if (rawCamera) setVideo(rawCamera, "camera");
+      showStatus("顔認識を読み込めなかったため、美顔なしで配信します（通信状況を確認してください）", true);
     }
   });
 }
@@ -217,10 +211,6 @@ function updatePreview() {
   preview.srcObject = tracks.length ? new MediaStream(tracks) : null; // 自分の音声はプレビューで鳴らさない
   placeholder.hidden = !!videoTrack;
   preview.classList.toggle("mirror", source === "camera"); // 自撮りのプレビューは左右反転
-  btnBeauty.disabled = source !== "camera";
-  btnBeauty.textContent = beautyOn ? "✨ 美顔 オン" : "✨ 美顔 オフ";
-  btnBeauty.classList.toggle("active", beautyOn);
-  beautyInput.disabled = !(beautyOn && source === "camera");
   btnCamera.classList.toggle("active", source === "camera");
   btnScreen.classList.toggle("active", source === "screen");
   btnImage.classList.toggle("active", source === "image");
@@ -230,15 +220,6 @@ function updatePreview() {
 }
 
 btnCamera.onclick = useCamera;
-btnBeauty.onclick = () => {
-  beautyOn = !beautyOn;
-  localStorageSet("beautyOn", beautyOn ? "1" : "0");
-  applyCamera();
-};
-beautyInput.oninput = () => {
-  beautyLevel = Number(beautyInput.value);
-  localStorageSet("beautyLevel", String(beautyLevel)); // 強さは次のフレームから反映される
-};
 btnScreen.onclick = useScreen;
 // 画面共有はスマホのブラウザでは使えないので、非対応ならボタンを隠す
 if (!navigator.mediaDevices?.getDisplayMedia) btnScreen.hidden = true;

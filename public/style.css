@@ -148,11 +148,6 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 4px
 .name-form .btn { padding: 6px 12px; font-size: 13px; }
 .chat-disabled { color: var(--muted); text-align: center; padding: 20px; margin: auto; font-size: 13px; }
 
-/* ---------- 美顔補正 ---------- */
-.beauty { align-items: center; margin-top: 10px; }
-.beauty-level { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
-.beauty-level input { width: 140px; accent-color: var(--accent); }
-
 /* ---------- 投げ銭 ---------- */
 .tip-panel .muted { color: var(--muted); font-weight: 400; font-size: 12px; }
 .tip-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
