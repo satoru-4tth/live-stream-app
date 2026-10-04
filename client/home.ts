@@ -38,6 +38,16 @@ function render(rooms: RoomSummary[]) {
       thumb.innerHTML = `<span class="live-badge">LIVE</span><span class="thumb-viewers">👁 <b></b></span><span class="thumb-time"></span>`;
       thumb.querySelector("b")!.textContent = String(r.viewerCount);
       thumb.querySelector(".thumb-time")!.textContent = elapsed(r.startedAt);
+      // 目を引くバッジ: 始まって 10 分以内は「新着」、3 人以上が見ていれば「人気」
+      const tags: string[] = [];
+      if (Date.now() - r.startedAt < 10 * 60 * 1000) tags.push("🆕 新着");
+      if (r.viewerCount >= 3) tags.push("🔥 人気");
+      if (tags.length) {
+        const t = document.createElement("span");
+        t.className = "thumb-tags";
+        t.textContent = tags.join(" ");
+        thumb.appendChild(t);
+      }
       const version = thumbnailVersion(r);
       if (version) {
         const img = document.createElement("img");

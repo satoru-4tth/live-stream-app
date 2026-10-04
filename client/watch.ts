@@ -1,5 +1,5 @@
-import { TIP_AMOUNTS, type ServerMessage, type SignalData } from "../shared/protocol";
-import { $, Signaling, formatYen, loadIceServers, setupChat, setupTipDisplay, setViewerCount } from "./common";
+import { REACTIONS, TIP_AMOUNTS, type ServerMessage, type SignalData } from "../shared/protocol";
+import { $, Signaling, formatYen, loadIceServers, setupChat, setupReactions, setupSupporters, setupTipDisplay, setViewerCount } from "./common";
 
 const video = $<HTMLVideoElement>("#remote");
 const overlay = $("#overlay");
@@ -42,7 +42,10 @@ async function start(id: string) {
   }
   setupChat(sig);
   setupTipDisplay(sig);
+  setupReactions(sig);
+  setupSupporters(sig);
   setupTipButtons(sig);
+  setupReactionButtons(sig);
 
   sig.on((msg) => onMessage(sig, msg));
   sig.send({ type: "join-room", roomId: id, name: nameInput.value });
@@ -56,6 +59,18 @@ async function start(id: string) {
     try { localStorage.setItem("viewerName", name); } catch { /* noop */ }
     nameInput.blur();
   });
+}
+
+function setupReactionButtons(sig: Signaling) {
+  const box = $("#reaction-buttons");
+  for (const emoji of REACTIONS) {
+    const b = document.createElement("button");
+    b.className = "reaction-btn";
+    b.textContent = emoji;
+    b.setAttribute("aria-label", `リアクション ${emoji}`);
+    b.onclick = () => sig.send({ type: "reaction", emoji });
+    box.appendChild(b);
+  }
 }
 
 function setupTipButtons(sig: Signaling) {

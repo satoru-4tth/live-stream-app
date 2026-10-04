@@ -1,6 +1,6 @@
 import type { ServerMessage, SignalData } from "../shared/protocol";
 import { startBeauty } from "./beauty";
-import { $, Signaling, loadIceServers, setupChat, setupTipDisplay, setViewerCount, elapsed } from "./common";
+import { $, Signaling, loadIceServers, setupChat, setupReactions, setupSupporters, setupTipDisplay, setViewerCount, elapsed } from "./common";
 
 // ---------- 要素 ----------
 const preview = $<HTMLVideoElement>("#preview");
@@ -251,6 +251,8 @@ btnGoLive.onclick = async () => {
   }
   setupChat(sig);
   setupTipDisplay(sig);
+  setupReactions(sig);
+  setupSupporters(sig);
   sig.on(onMessage);
   sig.send({ type: "create-room", title: titleInput.value, name: nameInput.value });
 };

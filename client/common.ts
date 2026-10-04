@@ -77,6 +77,7 @@ export function setupChat(sig: Signaling) {
       const name = document.createElement("span");
       name.className = "chat-name";
       name.textContent = msg.name + (msg.isBroadcaster ? " 🎙" : "");
+      if (!msg.isBroadcaster) name.style.color = nameColor(msg.name); // 名前ごとに色分け
       const text = document.createElement("span");
       text.className = "chat-text";
       text.textContent = msg.text; // textContent で XSS 対策
@@ -110,9 +111,109 @@ export function setupTipDisplay(sig: Signaling) {
       const pop = document.createElement("div");
       pop.className = "tip-pop";
       pop.textContent = `💰 ${msg.name} ${formatYen(msg.amount)}`;
-      wrap.appendChild(pop);
-      pop.addEventListener("animationend", () => pop.remove());
+      addTransient(wrap, pop, 3600);
+      // 高額ほど派手に: 1,000 円以上で紙吹雪、5,000 円以上は大きなバナーつき
+      if (msg.amount >= 1000) confetti(wrap, msg.amount >= 5000 ? 170 : 70);
+      if (msg.amount >= 5000) {
+        const banner = document.createElement("div");
+        banner.className = "tip-banner";
+        banner.textContent = `🎊 ${msg.name} さんから ${formatYen(msg.amount)}！ 🎊`;
+        addTransient(wrap, banner, 4200);
+      }
     }
+  });
+}
+
+/** 映像の上に一時的な要素を足し、アニメーションが終わる頃に取り除く (画面が非表示で終了通知が来ない場合に備えて時間でも消す) */
+function addTransient(wrap: HTMLElement, el: HTMLElement, ms: number) {
+  wrap.appendChild(el);
+  setTimeout(() => el.remove(), ms);
+}
+
+/** 名前から決まる色 (同じ名前はいつも同じ色。チャットが見分けやすくなる) */
+function nameColor(name: string): string {
+  let h = 0;
+  for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) % 360;
+  return `hsl(${h} 75% 70%)`;
+}
+
+const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/** 映像の上に紙吹雪を降らせる */
+function confetti(wrap: HTMLElement, count: number) {
+  if (reducedMotion()) return;
+  const canvas = document.createElement("canvas");
+  canvas.className = "confetti";
+  canvas.width = wrap.clientWidth;
+  canvas.height = wrap.clientHeight;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  const colors = ["#ff5d8f", "#ffd23f", "#3bceac", "#7c5cff", "#4cc9f0", "#ff9f1c"];
+  const pieces = Array.from({ length: count }, () => ({
+    x: Math.random() * canvas.width,
+    y: -10 - Math.random() * canvas.height * 0.5,
+    vx: (Math.random() - 0.5) * 3,
+    vy: 2 + Math.random() * 3.5,
+    size: 5 + Math.random() * 6,
+    rot: Math.random() * Math.PI,
+    vr: (Math.random() - 0.5) * 0.3,
+    color: colors[Math.floor(Math.random() * colors.length)],
+  }));
+  wrap.appendChild(canvas);
+  const end = performance.now() + 3200;
+  const tick = (now: number) => {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    for (const p of pieces) {
+      p.x += p.vx;
+      p.y += p.vy;
+      p.rot += p.vr;
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(-p.size / 2, -p.size / 4, p.size, p.size / 2);
+      ctx.restore();
+    }
+    if (now < end) requestAnimationFrame(tick);
+    else canvas.remove();
+  };
+  requestAnimationFrame(tick);
+  setTimeout(() => canvas.remove(), 4500); // 画面が非表示で描画が止まっても残らないように
+}
+
+/** 映像の上に流れるリアクション (配信者・視聴者共通) */
+export function setupReactions(sig: Signaling) {
+  const wrap = $(".video-wrap");
+  sig.on((msg) => {
+    if (msg.type !== "reaction" || reducedMotion()) return;
+    const el = document.createElement("div");
+    el.className = "reaction-pop";
+    el.textContent = msg.emoji; // textContent で XSS 対策
+    el.style.right = `${8 + Math.random() * 14}%`;
+    el.style.setProperty("--drift", `${Math.round((Math.random() - 0.5) * 80)}px`);
+    el.style.fontSize = `${26 + Math.round(Math.random() * 14)}px`;
+    addTransient(wrap, el, 2800);
+  });
+}
+
+/** 投げ銭の多い人 TOP3 の表示 (配信者・視聴者共通) */
+export function setupSupporters(sig: Signaling) {
+  const box = $("#supporters");
+  const medals = ["🥇", "🥈", "🥉"];
+  sig.on((msg) => {
+    if (msg.type !== "supporters") return;
+    box.hidden = msg.list.length === 0;
+    box.replaceChildren();
+    const title = document.createElement("span");
+    title.className = "supporters-title";
+    title.textContent = "🏆 サポーター";
+    box.appendChild(title);
+    msg.list.forEach((s, i) => {
+      const item = document.createElement("span");
+      item.className = "supporter";
+      item.textContent = `${medals[i]} ${s.name} ${formatYen(s.total)}`;
+      box.appendChild(item);
+    });
   });
 }
 

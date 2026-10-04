@@ -10,6 +10,12 @@ export interface RoomSummary {
   thumbnailUpdatedAt: number | null;
 }
 
+/** 投げ銭の多い人 (サポーターランキング) */
+export interface Supporter {
+  name: string;
+  total: number;
+}
+
 /** WebRTC のシグナリングデータ (SDP または ICE 候補) */
 export type SignalData =
   | { sdp: RTCSessionDescriptionInit }
@@ -24,6 +30,7 @@ export type ClientMessage =
   | { type: "set-name"; name: string }
   | { type: "thumbnail"; dataUrl: string }
   | { type: "tip"; amount: number }
+  | { type: "reaction"; emoji: string }
   | { type: "end-room" };
 
 /** サーバー → クライアント */
@@ -36,6 +43,8 @@ export type ServerMessage =
   | { type: "chat"; name: string; text: string; ts: number; isBroadcaster: boolean }
   | { type: "tip"; name: string; amount: number; ts: number }
   | { type: "tip-total"; total: number }
+  | { type: "supporters"; list: Supporter[] }
+  | { type: "reaction"; emoji: string }
   | { type: "system"; text: string }
   | { type: "viewer-count"; count: number }
   | { type: "request-thumbnail" }
@@ -44,6 +53,9 @@ export type ServerMessage =
 
 /** 投げ銭で選べる金額 (円)。サーバー側でもこの値だけ受け付ける */
 export const TIP_AMOUNTS = [100, 500, 1000, 5000, 10000] as const;
+
+/** リアクション (スタンプ) で送れる絵文字。サーバー側でもこの値だけ受け付ける */
+export const REACTIONS = ["❤️", "👏", "🎉", "😂", "🔥", "😮"] as const;
 
 export const ICE_SERVERS: RTCIceServer[] = [
   { urls: "stun:stun.l.google.com:19302" },

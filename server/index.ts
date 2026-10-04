@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { WebSocketServer, WebSocket } from "ws";
-import { ICE_SERVERS, TIP_AMOUNTS, type ClientMessage, type RoomSummary, type ServerMessage } from "../shared/protocol.js";
+import { ICE_SERVERS, REACTIONS, TIP_AMOUNTS, type ClientMessage, type RoomSummary, type ServerMessage } from "../shared/protocol.js";
 import { paymentProvider } from "./payments.js";
 
 const PORT = Number(process.env.PORT ?? 3000);
@@ -17,6 +17,7 @@ interface Client {
   name: string;
   roomId?: string;
   role?: "broadcaster" | "viewer";
+  lastReactionAt?: number;
 }
 
 interface Room {
@@ -28,6 +29,8 @@ interface Room {
   thumbnail?: { data: Buffer; updatedAt: number };
   thumbnailRequestedAt?: number;
   tipTotal: number;
+  /** 視聴者ごとの投げ銭合計 (サポーターランキング用。キーは接続 ID) */
+  supporters: Map<string, { name: string; total: number }>;
 }
 
 const MAX_THUMBNAIL_BYTES = 200 * 1024;
@@ -123,6 +126,7 @@ function handleMessage(client: Client, msg: ClientMessage) {
         viewers: new Map(),
         startedAt: Date.now(),
         tipTotal: 0,
+        supporters: new Map(),
       };
       client.name = clip(msg.name, 30) || "配信者";
       client.roomId = room.id;
@@ -152,6 +156,7 @@ function handleMessage(client: Client, msg: ClientMessage) {
       // 配信者に通知 → 配信者側から offer を送る
       send(room.broadcaster, { type: "viewer-joined", viewerId: client.id });
       send(client, { type: "tip-total", total: room.tipTotal });
+      send(client, { type: "supporters", list: topSupporters(room) });
       broadcastToRoom(room, { type: "system", text: `${client.name} さんが入室しました` });
       broadcastViewerCount(room);
       break;
@@ -193,12 +198,26 @@ function handleMessage(client: Client, msg: ClientMessage) {
         () => {
           if (!rooms.has(room.id)) return;
           room.tipTotal += amount;
+          const prev = room.supporters.get(client.id);
+          room.supporters.set(client.id, { name: viewerName, total: (prev?.total ?? 0) + amount });
           broadcastToRoom(room, { type: "tip", name: viewerName, amount, ts: Date.now() });
           broadcastToRoom(room, { type: "tip-total", total: room.tipTotal });
+          broadcastToRoom(room, { type: "supporters", list: topSupporters(room) });
           console.log(`[tip] ${room.id} ${viewerName} ¥${amount}`);
         },
         (e) => send(client, { type: "error", message: `決済に失敗しました: ${(e as Error).message}` }),
       );
+      break;
+    }
+
+    case "reaction": {
+      // ルーム内の誰でも送れる。決められた絵文字だけ、1 人あたり 0.15 秒に 1 回まで (連打で他の人の画面が埋まらないように)
+      const room = client.roomId ? rooms.get(client.roomId) : undefined;
+      if (!room || !(REACTIONS as readonly string[]).includes(msg.emoji)) return;
+      const now = Date.now();
+      if (now - (client.lastReactionAt ?? 0) < 150) return;
+      client.lastReactionAt = now;
+      broadcastToRoom(room, { type: "reaction", emoji: msg.emoji });
       break;
     }
 
@@ -259,6 +278,11 @@ function broadcastToRoom(room: Room, msg: ServerMessage) {
 
 function broadcastViewerCount(room: Room) {
   broadcastToRoom(room, { type: "viewer-count", count: room.viewers.size });
+}
+
+/** 投げ銭の多い順に上位 3 人 */
+function topSupporters(room: Room) {
+  return [...room.supporters.values()].sort((a, b) => b.total - a.total).slice(0, 3);
 }
 
 function summarize(room: Room): RoomSummary {
