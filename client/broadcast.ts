@@ -45,13 +45,20 @@ async function useCamera() {
   try {
     // 切替時は先に今のカメラを止める (スマホは同時に 2 つ開けないことがある)
     if (source === "camera") videoTrack?.stop();
-    // マイクが使えなくてもカメラは映せるように、映像だけ先に取得する
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: facing, width: { ideal: 1280 }, height: { ideal: 720 } },
-      audio: false,
-    });
+    const video = { facingMode: facing, width: { ideal: 1280 }, height: { ideal: 720 } };
+    let stream: MediaStream;
+    try {
+      // 映像とマイクを 1 回で取得する (スマホは後からマイクだけ取り直すと、先のカメラが止まることがある)
+      stream = await navigator.mediaDevices.getUserMedia({ video, audio: !audioTrack });
+    } catch (e) {
+      // マイクが拒否・非対応でもカメラだけは映せるように、映像のみで取り直す
+      stream = await navigator.mediaDevices.getUserMedia({ video, audio: false });
+      if (!audioTrack) {
+        showStatus(`マイクを使えませんでした（${(e as Error).name}）。音声なしで配信されます。ブラウザのマイク許可を確認してください`, true);
+      }
+    }
+    if (!audioTrack) setAudio(stream.getAudioTracks()[0] ?? null);
     setVideo(stream.getVideoTracks()[0], "camera");
-    if (!audioTrack) await tryMic();
   } catch (e) {
     showStatus(`カメラを取得できませんでした: ${(e as Error).message}`, true);
   }
@@ -154,6 +161,10 @@ function setVideo(track: MediaStreamTrack, kind: Source) {
 
 function setAudio(track: MediaStreamTrack | null) {
   audioTrack = track;
+  // 配信中にマイクが後から使えるようになった場合も、接続済みの視聴者に音声を流す
+  for (const pc of peers.values()) {
+    pc.getTransceivers().find((t) => t.receiver.track.kind === "audio")?.sender.replaceTrack(track);
+  }
   updatePreview();
 }
 
@@ -258,6 +269,7 @@ async function connectViewer(viewerId: string) {
   const stream = new MediaStream();
   if (videoTrack) pc.addTrack(videoTrack, stream);
   if (audioTrack) pc.addTrack(audioTrack, stream);
+  else pc.addTransceiver("audio", { direction: "sendonly" }); // 音声の送り口だけ作っておき、マイクが使えたら差し替える
 
   pc.onicecandidate = (e) => {
     if (e.candidate) sig?.send({ type: "signal", to: viewerId, data: { candidate: e.candidate.toJSON() } });

@@ -6,6 +6,7 @@ const overlay = $("#overlay");
 const titleEl = $("#title");
 const byEl = $("#broadcaster");
 const btnUnmute = $<HTMLButtonElement>("#btn-unmute");
+const audioNotice = $("#audio-notice");
 const joinForm = $<HTMLFormElement>("#join-form");
 const nameInput = $<HTMLInputElement>("#name");
 
@@ -128,15 +129,32 @@ function createPeer(sig: Signaling, iceServers: RTCIceServer[]) {
   };
   p.onconnectionstatechange = () => {
     if (p.connectionState === "failed") showOverlay("接続に失敗しました（ネットワーク環境によっては TURN サーバーが必要です）");
-    if (p.connectionState === "connected") hideOverlay();
+    if (p.connectionState === "connected") {
+      hideOverlay();
+      setTimeout(checkAudio, 4000);
+    }
   };
   return p;
 }
 
-btnUnmute.onclick = () => {
+btnUnmute.onclick = async () => {
   video.muted = false;
+  video.volume = 1;
+  await video.play().catch(() => {});
   btnUnmute.hidden = true;
+  setTimeout(checkAudio, 1500);
 };
+
+/** 配信者の音声が実際に届いているか確認し、届いていなければ理由を表示する */
+async function checkAudio() {
+  if (!pc || pc.connectionState !== "connected") return;
+  let bytes = 0;
+  (await pc.getStats()).forEach((r) => {
+    if (r.type === "inbound-rtp" && r.kind === "audio") bytes += r.bytesReceived ?? 0;
+  });
+  audioNotice.hidden = bytes > 0;
+  audioNotice.textContent = "配信者の音声が届いていません（配信者のマイクが使えない状態の可能性があります）";
+}
 
 function showOverlay(text: string) {
   overlay.textContent = text;
