@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { WebSocketServer, WebSocket } from "ws";
-import { TIP_AMOUNTS, type ClientMessage, type RoomSummary, type ServerMessage } from "../shared/protocol.js";
+import { ICE_SERVERS, TIP_AMOUNTS, type ClientMessage, type RoomSummary, type ServerMessage } from "../shared/protocol.js";
 import { paymentProvider } from "./payments.js";
 
 const PORT = Number(process.env.PORT ?? 3000);
@@ -38,6 +38,21 @@ const rooms = new Map<string, Room>();
 // ---------- HTTP ----------
 const app = express();
 app.use(express.static(path.join(__dirname, "..", "public"), { extensions: ["html"] }));
+
+// WebRTC の接続先候補。STUN に加え、環境変数で TURN を設定できる
+// (スマホのモバイル回線など、直接つなげないネットワークでは TURN 経由でないと映像が届かない)
+//   TURN_URLS=turn:example.com:3478,turns:example.com:443?transport=tcp
+//   TURN_USERNAME=... / TURN_CREDENTIAL=...
+function iceServers(): RTCIceServer[] {
+  const urls = (process.env.TURN_URLS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  const { TURN_USERNAME: username, TURN_CREDENTIAL: credential } = process.env;
+  if (urls.length === 0 || !username || !credential) return ICE_SERVERS;
+  return [...ICE_SERVERS, { urls, username, credential }];
+}
+
+app.get("/api/ice-servers", (_req, res) => {
+  res.set("Cache-Control", "no-store").json(iceServers());
+});
 
 app.get("/api/rooms", (_req, res) => {
   const list: RoomSummary[] = [...rooms.values()]

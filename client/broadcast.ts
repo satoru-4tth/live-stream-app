@@ -1,5 +1,5 @@
-import { ICE_SERVERS, type ServerMessage, type SignalData } from "../shared/protocol";
-import { $, Signaling, setupChat, setupTipDisplay, setViewerCount, elapsed } from "./common";
+import type { ServerMessage, SignalData } from "../shared/protocol";
+import { $, Signaling, loadIceServers, setupChat, setupTipDisplay, setViewerCount, elapsed } from "./common";
 
 // ---------- 要素 ----------
 const preview = $<HTMLVideoElement>("#preview");
@@ -10,6 +10,7 @@ const titleInput = $<HTMLInputElement>("#title");
 const nameInput = $<HTMLInputElement>("#name");
 const btnCamera = $<HTMLButtonElement>("#btn-camera");
 const btnScreen = $<HTMLButtonElement>("#btn-screen");
+const btnFlip = $<HTMLButtonElement>("#btn-flip");
 const btnImage = $<HTMLButtonElement>("#btn-image");
 const imageInput = $<HTMLInputElement>("#image-input");
 const btnMic = $<HTMLButtonElement>("#btn-mic");
@@ -32,14 +33,25 @@ const peers = new Map<string, RTCPeerConnection>();
 nameInput.value = localStorageGet("name") ?? "";
 
 // ---------- メディア取得 ----------
+// カメラ・マイクは https (または localhost) のページでしか使えない。アプリ内ブラウザ (LINE など) でも使えないことがある
+const hasMedia = !!navigator.mediaDevices?.getUserMedia;
+const noMediaMessage = window.isSecureContext
+  ? "このブラウザではカメラ・マイクを使えません。Safari / Chrome で直接開いてください（LINE などのアプリ内ブラウザでは使えないことがあります）"
+  : "カメラ・マイクを使うには https:// のURLで開く必要があります";
+let facing: "user" | "environment" = "user"; // 前面 / 背面カメラ
+
 async function useCamera() {
+  if (!hasMedia) return showStatus(noMediaMessage, true);
   try {
+    // 切替時は先に今のカメラを止める (スマホは同時に 2 つ開けないことがある)
+    if (source === "camera") videoTrack?.stop();
+    // マイクが使えなくてもカメラは映せるように、映像だけ先に取得する
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: { width: { ideal: 1280 }, height: { ideal: 720 } },
-      audio: !audioTrack,
+      video: { facingMode: facing, width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false,
     });
-    if (!audioTrack) setAudio(stream.getAudioTracks()[0] ?? null);
     setVideo(stream.getVideoTracks()[0], "camera");
+    if (!audioTrack) await tryMic();
   } catch (e) {
     showStatus(`カメラを取得できませんでした: ${(e as Error).message}`, true);
   }
@@ -54,8 +66,8 @@ async function useScreen() {
     track.addEventListener("ended", () => {
       if (videoTrack === track) useCamera();
     });
-    if (!audioTrack) await tryMic();
     setVideo(track, "screen");
+    if (!audioTrack) await tryMic();
   } catch (e) {
     showStatus(`画面共有を開始できませんでした: ${(e as Error).message}`, true);
   }
@@ -100,8 +112,8 @@ async function useImage(file: File) {
       track.requestFrame?.();
     }, 500);
 
-    if (!audioTrack) await tryMic();
     setVideo(track, "image");
+    if (!audioTrack) await tryMic();
     showStatus(audioTrack ? "画像を配信映像に設定しました（マイク音声も配信されます）" : "画像を配信映像に設定しました（マイクなし）");
   } catch {
     showStatus("画像を読み込めませんでした", true);
@@ -110,13 +122,20 @@ async function useImage(file: File) {
   }
 }
 
-async function tryMic() {
-  try {
-    const s = await navigator.mediaDevices.getUserMedia({ audio: true });
-    setAudio(s.getAudioTracks()[0] ?? null);
-  } catch {
-    /* マイクなしでも配信可能 */
-  }
+/** マイクを試す。拒否・非対応・許可ダイアログが応答しない場合でも、10 秒で諦めて先へ進む（マイクなしでも配信可能） */
+function tryMic(): Promise<void> {
+  return new Promise((resolve) => {
+    if (!hasMedia) return resolve();
+    const timer = setTimeout(resolve, 10000);
+    navigator.mediaDevices
+      .getUserMedia({ audio: true })
+      .then((s) => setAudio(s.getAudioTracks()[0] ?? null))
+      .catch(() => {})
+      .finally(() => {
+        clearTimeout(timer);
+        resolve();
+      });
+  });
 }
 
 function setVideo(track: MediaStreamTrack, kind: Source) {
@@ -142,7 +161,8 @@ function updatePreview() {
   const tracks = [videoTrack].filter(Boolean) as MediaStreamTrack[];
   preview.srcObject = tracks.length ? new MediaStream(tracks) : null; // 自分の音声はプレビューで鳴らさない
   placeholder.hidden = !!videoTrack;
-  preview.classList.toggle("mirror", source === "camera");
+  preview.classList.toggle("mirror", source === "camera" && facing === "user"); // 自撮りだけ左右反転
+  btnFlip.disabled = source !== "camera";
   btnCamera.classList.toggle("active", source === "camera");
   btnScreen.classList.toggle("active", source === "screen");
   btnImage.classList.toggle("active", source === "image");
@@ -152,7 +172,13 @@ function updatePreview() {
 }
 
 btnCamera.onclick = useCamera;
+btnFlip.onclick = () => {
+  facing = facing === "user" ? "environment" : "user";
+  useCamera();
+};
 btnScreen.onclick = useScreen;
+// 画面共有はスマホのブラウザでは使えないので、非対応ならボタンを隠す
+if (!navigator.mediaDevices?.getDisplayMedia) btnScreen.hidden = true;
 btnImage.onclick = () => imageInput.click();
 imageInput.onchange = () => {
   const file = imageInput.files?.[0];
@@ -226,7 +252,7 @@ function onMessage(msg: ServerMessage) {
 
 // ---------- WebRTC (配信者 → 視聴者ごとに 1 本の接続) ----------
 async function connectViewer(viewerId: string) {
-  const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+  const pc = new RTCPeerConnection({ iceServers: await loadIceServers() });
   peers.set(viewerId, pc);
 
   const stream = new MediaStream();
@@ -333,3 +359,4 @@ function localStorageSet(k: string, v: string) {
 $<HTMLFormElement>("#chat-form").addEventListener("submit", (e) => e.preventDefault());
 
 updatePreview();
+if (!hasMedia) showStatus(`${noMediaMessage}（「画像」の配信は使えます）`, true);

@@ -1,4 +1,13 @@
-import type { ClientMessage, ServerMessage } from "../shared/protocol";
+import { ICE_SERVERS, type ClientMessage, type ServerMessage } from "../shared/protocol";
+
+let iceServers: Promise<RTCIceServer[]> | undefined;
+/** サーバーから WebRTC の接続先候補 (STUN / TURN) を取得する。取得できなければ既定値を使う */
+export function loadIceServers(): Promise<RTCIceServer[]> {
+  iceServers ??= fetch("/api/ice-servers")
+    .then((r) => (r.ok ? (r.json() as Promise<RTCIceServer[]>) : ICE_SERVERS))
+    .catch(() => ICE_SERVERS);
+  return iceServers;
+}
 
 /** 型付き WebSocket ラッパー */
 export class Signaling {

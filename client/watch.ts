@@ -1,5 +1,5 @@
-import { ICE_SERVERS, TIP_AMOUNTS, type ServerMessage, type SignalData } from "../shared/protocol";
-import { $, Signaling, formatYen, setupChat, setupTipDisplay, setViewerCount } from "./common";
+import { TIP_AMOUNTS, type ServerMessage, type SignalData } from "../shared/protocol";
+import { $, Signaling, formatYen, loadIceServers, setupChat, setupTipDisplay, setViewerCount } from "./common";
 
 const video = $<HTMLVideoElement>("#remote");
 const overlay = $("#overlay");
@@ -98,7 +98,7 @@ async function handleSignal(sig: Signaling, data: SignalData) {
   if ("sdp" in data) {
     if (data.sdp.type !== "offer") return;
     pc?.close();
-    pc = createPeer(sig);
+    pc = createPeer(sig, await loadIceServers());
     await pc.setRemoteDescription(data.sdp);
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
@@ -108,8 +108,8 @@ async function handleSignal(sig: Signaling, data: SignalData) {
   }
 }
 
-function createPeer(sig: Signaling) {
-  const p = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+function createPeer(sig: Signaling, iceServers: RTCIceServer[]) {
+  const p = new RTCPeerConnection({ iceServers });
   const stream = new MediaStream();
   video.srcObject = stream;
 
