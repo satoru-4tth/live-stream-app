@@ -16,7 +16,7 @@
     <section>
       <div class="video-wrap">
         <video id="preview" autoplay playsinline muted></video>
-        <div id="preview-placeholder" class="preview-placeholder">カメラまたは画面共有を選んでください</div>
+        <div id="preview-placeholder" class="preview-placeholder">カメラ・画面共有・画像のどれかを選んでください</div>
         <div class="video-badges live-only">
           <span class="badge badge-live">LIVE</span>
           <span class="badge" id="live-timer">00:00</span>
@@ -27,6 +27,8 @@
       <div class="controls">
         <button id="btn-camera" class="btn">📷 カメラ</button>
         <button id="btn-screen" class="btn">🖥 画面共有</button>
+        <button id="btn-image" class="btn">🖼 画像</button>
+        <input id="image-input" type="file" accept="image/*" hidden />
         <button id="btn-mic" class="btn" disabled>🎤 マイクなし</button>
       </div>
 

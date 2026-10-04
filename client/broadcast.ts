@@ -10,6 +10,8 @@ const titleInput = $<HTMLInputElement>("#title");
 const nameInput = $<HTMLInputElement>("#name");
 const btnCamera = $<HTMLButtonElement>("#btn-camera");
 const btnScreen = $<HTMLButtonElement>("#btn-screen");
+const btnImage = $<HTMLButtonElement>("#btn-image");
+const imageInput = $<HTMLInputElement>("#image-input");
 const btnMic = $<HTMLButtonElement>("#btn-mic");
 const btnGoLive = $<HTMLButtonElement>("#btn-go-live");
 const btnEnd = $<HTMLButtonElement>("#btn-end");
@@ -21,7 +23,9 @@ const statusEl = $("#status");
 // ---------- 状態 ----------
 let videoTrack: MediaStreamTrack | null = null;
 let audioTrack: MediaStreamTrack | null = null;
-let source: "camera" | "screen" | null = null;
+type Source = "camera" | "screen" | "image";
+let source: Source | null = null;
+let imageTimer = 0; // 画像配信時のフレーム送出タイマー
 let sig: Signaling | null = null;
 const peers = new Map<string, RTCPeerConnection>();
 
@@ -45,6 +49,7 @@ async function useScreen() {
   try {
     const stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 30 }, audio: false });
     const track = stream.getVideoTracks()[0];
+    track.contentHint = "detail"; // 文字が読めるよう画質優先
     // ブラウザの「共有を停止」ボタンで止められたらカメラに戻す
     track.addEventListener("ended", () => {
       if (videoTrack === track) useCamera();
@@ -53,6 +58,55 @@ async function useScreen() {
     setVideo(track, "screen");
   } catch (e) {
     showStatus(`画面共有を開始できませんでした: ${(e as Error).message}`, true);
+  }
+}
+
+/**
+ * 画像配信: 選んだ画像を canvas に描き、canvas を映像トラックとして配信する。
+ * カメラ・画面共有なしでも配信でき、マイクがあれば音声だけ乗せられる（ラジオ風）。
+ */
+async function useImage(file: File) {
+  if (!file.type.startsWith("image/")) {
+    return showStatus("画像ファイルを選んでください", true);
+  }
+  const url = URL.createObjectURL(file);
+  try {
+    const img = new Image();
+    img.src = url;
+    await img.decode();
+
+    const canvas = document.createElement("canvas");
+    canvas.width = 1280;
+    canvas.height = 720;
+    const ctx = canvas.getContext("2d")!;
+    const draw = () => {
+      // 16:9 の黒背景に、縦横比を保って中央に収める
+      ctx.fillStyle = "#000";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      const scale = Math.min(canvas.width / img.width, canvas.height / img.height);
+      const w = img.width * scale;
+      const h = img.height * scale;
+      ctx.drawImage(img, (canvas.width - w) / 2, (canvas.height - h) / 2, w, h);
+    };
+    draw();
+
+    // 静止画は変化がないとフレームが送られないため、定期的に描き直して送出する
+    const stream = canvas.captureStream(0);
+    const track = stream.getVideoTracks()[0] as CanvasCaptureMediaStreamTrack;
+    track.contentHint = "detail"; // 静止画なので画質（解像度）優先でエンコード
+    clearInterval(imageTimer);
+    imageTimer = window.setInterval(() => {
+      draw();
+      track.requestFrame?.();
+    }, 500);
+
+    if (!audioTrack) await tryMic();
+    setVideo(track, "image");
+    showStatus(audioTrack ? "画像を配信映像に設定しました（マイク音声も配信されます）" : "画像を配信映像に設定しました（マイクなし）");
+  } catch {
+    showStatus("画像を読み込めませんでした", true);
+  } finally {
+    URL.revokeObjectURL(url);
   }
 }
 
@@ -65,8 +119,9 @@ async function tryMic() {
   }
 }
 
-function setVideo(track: MediaStreamTrack, kind: "camera" | "screen") {
+function setVideo(track: MediaStreamTrack, kind: Source) {
   const old = videoTrack;
+  if (kind !== "image") clearInterval(imageTimer); // 画像以外に切り替えたら描画を止める
   videoTrack = track;
   source = kind;
   // 配信中なら全視聴者への送信トラックを差し替え (再接続不要)
@@ -75,18 +130,12 @@ function setVideo(track: MediaStreamTrack, kind: "camera" | "screen") {
     sender?.replaceTrack(track);
   }
   if (old && old !== track) old.stop();
-  // 配信開始前はチャット送信でページがリロードされないように
-$<HTMLFormElement>("#chat-form").addEventListener("submit", (e) => e.preventDefault());
-
-updatePreview();
+  updatePreview();
 }
 
 function setAudio(track: MediaStreamTrack | null) {
   audioTrack = track;
-  // 配信開始前はチャット送信でページがリロードされないように
-$<HTMLFormElement>("#chat-form").addEventListener("submit", (e) => e.preventDefault());
-
-updatePreview();
+  updatePreview();
 }
 
 function updatePreview() {
@@ -96,6 +145,7 @@ function updatePreview() {
   preview.classList.toggle("mirror", source === "camera");
   btnCamera.classList.toggle("active", source === "camera");
   btnScreen.classList.toggle("active", source === "screen");
+  btnImage.classList.toggle("active", source === "image");
   btnGoLive.disabled = !videoTrack || !!sig;
   btnMic.disabled = !audioTrack;
   btnMic.textContent = !audioTrack ? "🎤 マイクなし" : audioTrack.enabled ? "🎤 ミュート" : "🔇 ミュート解除";
@@ -103,13 +153,16 @@ function updatePreview() {
 
 btnCamera.onclick = useCamera;
 btnScreen.onclick = useScreen;
+btnImage.onclick = () => imageInput.click();
+imageInput.onchange = () => {
+  const file = imageInput.files?.[0];
+  if (file) useImage(file);
+  imageInput.value = ""; // 同じ画像を選び直せるように
+};
 btnMic.onclick = () => {
   if (!audioTrack) return;
   audioTrack.enabled = !audioTrack.enabled;
-  // 配信開始前はチャット送信でページがリロードされないように
-$<HTMLFormElement>("#chat-form").addEventListener("submit", (e) => e.preventDefault());
-
-updatePreview();
+  updatePreview();
 };
 
 // ---------- 配信開始 ----------
@@ -142,6 +195,7 @@ function onMessage(msg: ServerMessage) {
       livePanel.hidden = false;
       document.body.classList.add("is-live");
       shareLink.value = `${location.origin}/watch?room=${msg.roomId}`;
+      $<HTMLInputElement>("#chat-input").placeholder = "コメントする…";
       timer = window.setInterval(() => (liveTimer.textContent = elapsed(startedAt)), 1000);
       showStatus("配信中です。リンクを共有して視聴者を招待しましょう。");
       break;
@@ -212,6 +266,7 @@ btnEnd.onclick = () => {
   for (const pc of peers.values()) pc.close();
   peers.clear();
   clearInterval(timer);
+  clearInterval(imageTimer);
   videoTrack?.stop();
   audioTrack?.stop();
   location.href = "/";
